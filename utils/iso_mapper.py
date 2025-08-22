@@ -169,16 +169,23 @@ class ISOMapper:
     
     @staticmethod
     def _parse_json_languages(json_str: str) -> List[str]:
-        """Parse JSON-like language data with ISO code mapping."""
-        # Extract both 'name' and 'iso_639_1' patterns
-        name_pattern = r"'name':\s*'([^']+)'|\"name\":\s*\"([^\"]+)\""
-        iso_pattern = r"'iso_639_1':\s*'([^']+)'|\"iso_639_1\":\s*\"([^\"]+)\""
+        """Parse JSON-like language data with ISO code mapping. Prioritizes english_name field."""
+        # PRIORITY 1: Extract 'english_name' field first (cleaner, no special characters)
+        english_name_pattern = r"'english_name':\s*'([^']+)'|\"english_name\":\s*\"([^\"]+)\""
+        english_matches = re.findall(english_name_pattern, json_str)
+        english_names = [match[0] if match[0] else match[1] for match in english_matches if any(match)]
         
-        # Get names first
+        # If we have english names, use those and skip the rest
+        if english_names:
+            return [name for name in english_names if name and len(name) > 1]
+        
+        # PRIORITY 2: Extract regular 'name' field as fallback
+        name_pattern = r"'name':\s*'([^']+)'|\"name\":\s*\"([^\"]+)\""
         name_matches = re.findall(name_pattern, json_str)
         names = [match[0] if match[0] else match[1] for match in name_matches if any(match)]
         
-        # Get ISO codes and convert them
+        # PRIORITY 3: Extract and map ISO codes as last resort
+        iso_pattern = r"'iso_639_1':\s*'([^']+)'|\"iso_639_1\":\s*\"([^\"]+)\""
         iso_matches = re.findall(iso_pattern, json_str)
         iso_codes = [match[0] if match[0] else match[1] for match in iso_matches if any(match)]
         
@@ -190,8 +197,8 @@ class ISOMapper:
                 if mapped_name and mapped_name != code:
                     mapped_languages.append(mapped_name)
         
-        # Combine and deduplicate, preferring mapped names over original names
-        all_languages = mapped_languages + names
+        # Combine and deduplicate, preferring names over mapped ISO codes
+        all_languages = names + mapped_languages
         return list(dict.fromkeys(all_languages))  # Remove duplicates while preserving order
     
     @staticmethod

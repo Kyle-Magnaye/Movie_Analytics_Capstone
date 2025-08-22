@@ -35,8 +35,8 @@ class Movie:
         
         self.title = self._clean_text(title)
         self.release_date = self._standardize_date(release_date)
-        self.genres = self._clean_and_parse_json_field(genres)
-        self.production_companies = self._clean_and_parse_json_field(production_companies)
+        self.genres = self._parse_flexible_field(genres, 'genres')
+        self.production_companies = self._parse_flexible_field(production_companies, 'production_companies')
         self.production_countries = production_countries  # Will be cleaned by processor
         self.spoken_languages = spoken_languages  # Will be cleaned by processor
         self.budget = self._clean_financial_data(budget)
@@ -153,13 +153,32 @@ class Movie:
             logger.warning(f"Could not convert financial value {value}: {e}")
             return 0
     
-    def _clean_and_parse_json_field(self, json_str: str) -> List[str]:
-        """Parse JSON-like strings and extract names."""
-        if pd.isna(json_str) or json_str is None or str(json_str).strip() == "":
+    def _parse_flexible_field(self, field_str: str, field_type: str) -> List[str]:
+        """Parse field that can be either JSON-like or comma-separated."""
+        if pd.isna(field_str) or field_str is None or str(field_str).strip() == "":
             return []
         
         try:
-            json_str = str(json_str).strip()
+            field_str = str(field_str).strip()
+            
+            # Check if it looks like JSON (contains brackets and quotes)
+            if (field_str.startswith('[') and field_str.endswith(']')) and ("'" in field_str or '"' in field_str):
+                # Try JSON-like parsing first
+                parsed_items = self._parse_json_field(field_str, field_type)
+                if parsed_items:  # If JSON parsing was successful
+                    return parsed_items
+            
+            # Fallback to comma-separated parsing
+            return self._parse_comma_separated_field(field_str)
+            
+        except Exception as e:
+            logger.warning(f"Could not parse {field_type} field {field_str}: {e}")
+            return []
+    
+    def _parse_json_field(self, json_str: str, field_type: str) -> List[str]:
+        """Parse JSON-like strings and extract names."""
+        try:
+            # Look for 'name' field in JSON-like structure
             name_pattern = r"'name':\s*'([^']+)'|\"name\":\s*\"([^\"]+)\""
             matches = re.findall(name_pattern, json_str)
             
@@ -167,13 +186,39 @@ class Movie:
             for match in matches:
                 name = match[0] if match[0] else match[1]
                 if name:
-                    names.append(self._clean_text(name))
+                    cleaned_name = self._clean_text(name)
+                    if cleaned_name:
+                        names.append(cleaned_name)
             
-            return names if names else []
+            return names
             
         except Exception as e:
-            logger.warning(f"Could not parse JSON field {json_str}: {e}")
+            logger.debug(f"JSON parsing failed for {field_type}: {e}")
             return []
+    
+    def _parse_comma_separated_field(self, field_str: str) -> List[str]:
+        """Parse comma-separated values."""
+        try:
+            # Remove any brackets if present
+            field_str = field_str.strip('[]')
+            
+            # Split by comma and clean each item
+            items = []
+            for item in field_str.split(','):
+                # Remove quotes and extra whitespace
+                cleaned_item = item.strip().strip('"\'')
+                if cleaned_item and len(cleaned_item) > 1:
+                    items.append(self._clean_text(cleaned_item))
+            
+            return items
+            
+        except Exception as e:
+            logger.debug(f"Comma-separated parsing failed: {e}")
+            return []
+    
+    def _clean_and_parse_json_field(self, json_str: str) -> List[str]:
+        """Legacy method - kept for backwards compatibility."""
+        return self._parse_flexible_field(json_str, 'legacy')
     
     def to_dict(self) -> Dict:
         """Convert movie object to dictionary.""" 

@@ -222,7 +222,6 @@ class MovieDataProcessor:
         merged_df = merged_df.drop('movie_id', axis=1, errors='ignore')
         
         # Fill missing rating values with defaults for movies without ratings
-       # Fill missing rating values with defaults for movies without ratings
         rating_defaults = {
             'avg_rating': 0.0,
             'total_ratings': 0,
