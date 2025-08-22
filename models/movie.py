@@ -176,10 +176,7 @@ class Movie:
             return []
     
     def to_dict(self) -> Dict:
-        """Convert movie object to dictionary."""
-        if not self.is_valid:
-            return None
-            
+        """Convert movie object to dictionary.""" 
         return {
             'id': self.id,
             'title': self.title,

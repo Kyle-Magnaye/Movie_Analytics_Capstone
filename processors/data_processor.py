@@ -86,10 +86,11 @@ class MovieDataProcessor:
         
         logger.info("Processing movie data with ISO mapping...")
         self.processed_movies = []
+        dropped_count = 0
         
         for idx, row in self.movies_df.iterrows():
             try:
-                # Create movie instance
+                # Create movie instance - this will raise ValueError for invalid movies
                 movie = Movie(
                     movie_id=row.get('id', 0),
                     title=row.get('title', ''),
@@ -112,11 +113,17 @@ class MovieDataProcessor:
                 
                 self.processed_movies.append(movie)
                 
+            except ValueError as e:
+                # Skip movies with invalid IDs (dates) or budgets (file extensions)
+                logger.debug(f"Skipping invalid movie at index {idx}: {e}")
+                dropped_count += 1
+                continue
             except Exception as e:
+                # Log other unexpected errors but continue processing
                 logger.error(f"Error processing movie at index {idx}: {e}")
                 continue
         
-        logger.info(f"Processed {len(self.processed_movies)} movies")
+        logger.info(f"Processed {len(self.processed_movies)} movies, dropped {dropped_count} invalid movies")
         return self.processed_movies
     
     def process_ratings(self) -> List[Rating]:
@@ -215,14 +222,18 @@ class MovieDataProcessor:
         merged_df = merged_df.drop('movie_id', axis=1, errors='ignore')
         
         # Fill missing rating values with defaults for movies without ratings
+       # Fill missing rating values with defaults for movies without ratings
         rating_defaults = {
             'avg_rating': 0.0,
             'total_ratings': 0,
             'std_dev': 0.0,
             'last_rated': None
         }
-        merged_df = merged_df.fillna(rating_defaults)
-        
+
+        for column, default_value in rating_defaults.items():
+            if column in merged_df.columns:
+                merged_df.loc[merged_df[column].isna(), column] = default_value
+                
         # Convert list columns to string format for CSV compatibility
         list_columns = ['genres', 'production_companies', 'production_countries', 'spoken_languages']
         for col in list_columns:
