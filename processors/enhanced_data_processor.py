@@ -244,11 +244,11 @@ class EnhancedMovieDataProcessor:
             # tmdb_data['spoken_languages'] already contains just the english_name values
             self.merged_df.at[row_idx, 'spoken_languages'] = tmdb_data['spoken_languages']
     
-    def clean_data_with_existing_methods(self) -> List[Movie]:
+    def clean_data_with_proper_methods(self) -> List[Movie]:
         """
-        Apply existing cleaning methods from Movie class but skip spoken_languages cleaning.
+        Apply PROPER cleaning methods including Rating class for timestamps and formatting.
         """
-        logger.info("Applying existing cleaning methods to processed data...")
+        logger.info("Applying proper cleaning methods with Rating class...")
         
         self.processed_movies = []
         dropped_count = 0
@@ -256,7 +256,6 @@ class EnhancedMovieDataProcessor:
         for idx, row in self.merged_df.iterrows():
             try:
                 # Create movie instance with existing cleaning logic
-                # But we'll override spoken_languages after creation
                 movie = Movie(
                     movie_id=row.get('id', 0),
                     title=row.get('title', ''),
@@ -264,47 +263,54 @@ class EnhancedMovieDataProcessor:
                     genres=row.get('genres', ''),
                     production_companies=row.get('production_companies', ''),
                     production_countries=row.get('production_countries', ''),
-                    spoken_languages='',  # Skip original spoken_languages cleaning
+                    spoken_languages=row.get('spoken_languages', ''),  # This will be cleaned
                     budget=row.get('budget', 0),
                     revenue=row.get('revenue', 0)
                 )
                 
-                # Apply ISO mapping for countries (but not languages since we have better TMDB data)
+                # PROPERLY clean production countries with ISO mapping
                 movie.production_countries = ISOMapper.clean_and_map_countries(
                     row.get('production_countries', '')
                 )
                 
-                # Use the TMDB-fetched spoken_languages directly
-                if isinstance(row.get('spoken_languages'), list):
-                    movie.spoken_languages = row.get('spoken_languages', [])
-                else:
-                    # Handle case where it might be a string
-                    spoken_lang_str = str(row.get('spoken_languages', ''))
-                    if spoken_lang_str and spoken_lang_str != 'nan':
-                        movie.spoken_languages = [spoken_lang_str]
-                    else:
-                        movie.spoken_languages = []
+                # PROPERLY clean spoken languages with ISO mapping  
+                movie.spoken_languages = ISOMapper.clean_and_map_languages(
+                    row.get('spoken_languages', '')
+                )
                 
-                # Add rating data if available
+                # Convert movie to dict
                 movie_dict = movie.to_dict()
                 
-                # Add ratings data
-                rating_columns = ['avg_rating', 'total_ratings', 'std_dev', 'last_rated']
-                for col in rating_columns:
-                    if col in row and not pd.isna(row[col]):
-                        movie_dict[col] = row[col]
-                    else:
-                        # Set defaults for missing ratings
-                        if col == 'avg_rating':
-                            movie_dict[col] = 0.0
-                        elif col == 'total_ratings':
-                            movie_dict[col] = 0
-                        elif col == 'std_dev':
-                            movie_dict[col] = 0.0
-                        else:
-                            movie_dict[col] = None
+                # PROPERLY process ratings data using Rating class
+                if any(col in row and not pd.isna(row[col]) for col in ['avg_rating', 'total_ratings', 'std_dev', 'last_rated']):
+                    ratings_data = {
+                        'avg_rating': row.get('avg_rating'),
+                        'total_ratings': row.get('total_ratings'), 
+                        'std_dev': row.get('std_dev'),
+                        'last_rated': row.get('last_rated')
+                    }
+                    
+                    # Use Rating class to properly clean and format ratings
+                    rating = Rating(movie.id, ratings_data)
+                    rating_dict = rating.to_dict()
+                    
+                    # Add cleaned ratings to movie dict
+                    movie_dict.update({
+                        'avg_rating': rating_dict['avg_rating'],
+                        'total_ratings': rating_dict['total_ratings'],
+                        'std_dev': rating_dict['std_dev'],
+                        'last_rated': rating_dict['last_rated']  # This will be properly formatted timestamp
+                    })
+                else:
+                    # Set defaults for missing ratings
+                    movie_dict.update({
+                        'avg_rating': 0.0,
+                        'total_ratings': 0,
+                        'std_dev': 0.0,
+                        'last_rated': None
+                    })
                 
-                # Store the enhanced movie data
+                # Store the properly cleaned movie data
                 self.processed_movies.append(movie_dict)
                 
             except ValueError as e:
@@ -367,6 +373,7 @@ class EnhancedMovieDataProcessor:
             logger.info(f"- Movies with budget > 0: {len(final_df[final_df['budget'] > 0])}")
             logger.info(f"- Movies with revenue > 0: {len(final_df[final_df['revenue'] > 0])}")
             logger.info(f"- Movies with ratings: {len(final_df[final_df['total_ratings'] > 0])}")
+            logger.info(f"- Movies with proper timestamps: {len(final_df[final_df['last_rated'].notna()])}")
             
             return output_path
             
@@ -378,7 +385,7 @@ class EnhancedMovieDataProcessor:
                             ratings_json_path: str, output_path: str = 'final_cleaned_movies.csv',
                             use_tmdb_api: bool = True, batch_size: int = 50) -> str:
         """
-        Run the complete data processing pipeline.
+        Run the complete data processing pipeline with PROPER cleaning.
         
         Args:
             main_csv_path: Path to main CSV file
@@ -392,8 +399,8 @@ class EnhancedMovieDataProcessor:
             Path to saved final dataset
         """
         try:
-            logger.info("🎬 Starting Enhanced Movie Data Processing Pipeline")
-            logger.info("=" * 60)
+            logger.info("🎬 Starting Enhanced Movie Data Processing Pipeline WITH PROPER CLEANING")
+            logger.info("=" * 70)
             
             # Step 1: Load and merge all data sources
             logger.info("Step 1: Loading and merging data sources...")
@@ -406,16 +413,21 @@ class EnhancedMovieDataProcessor:
             else:
                 logger.info("Step 2: Skipping TMDB API integration (disabled)")
             
-            # Step 3: Apply existing cleaning methods
-            logger.info("Step 3: Applying data cleaning methods...")
-            self.clean_data_with_existing_methods()
+            # Step 3: Apply PROPER cleaning methods (including Rating class)
+            logger.info("Step 3: Applying PROPER data cleaning methods with Rating class...")
+            self.clean_data_with_proper_methods()  # FIXED: Use proper cleaning method
             
             # Step 4: Save final dataset
             logger.info("Step 4: Saving final cleaned dataset...")
             final_path = self.save_final_dataset(output_path)
             
-            logger.info("✅ Pipeline completed successfully!")
+            logger.info("✅ Pipeline completed successfully with PROPER cleaning!")
             logger.info(f"📁 Final dataset saved to: {final_path}")
+            logger.info("📋 Cleaning applied:")
+            logger.info("  ✅ Timestamps converted to readable format")
+            logger.info("  ✅ List fields properly formatted")
+            logger.info("  ✅ Countries and languages properly mapped")
+            logger.info("  ✅ Rating data properly cleaned and validated")
             
             return final_path
             
