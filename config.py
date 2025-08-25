@@ -1,0 +1,7 @@
+TMDB_API_KEY = "54e8dccdf76dabda6e23e45e60036ca6"
+TMDB_BASE_URL = "https://api.themoviedb.org/3"
+TMDB_ACCESS_TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI1NGU4ZGNjZGY3NmRhYmRhNmUyM2U0NWU2MDAzNmNhNiIsIm5iZiI6MTc1NTIyMjU0Mi44NzYsInN1YiI6IjY4OWU5MjBlOGFhZWFjNDQzYzhkYmU5OCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.LbtZfb70_fdXI1CEyqRBUHsgSmZkOoEyQIKlNkqDMno"  # Preferred: Bearer token authentication
+
+MAX_RETRIES = 3
+REQUEST_TIMEOUT = 30  # seconds
+USE_BEARER_TOKEN = True  
